@@ -1,0 +1,88 @@
+{
+  "projectType": "saas",
+  "projectName": "EduLearn Hub",
+  "projectDescription": "A full-stack educational platform monorepo featuring an Express API server, React frontend, and shared TypeScript libraries for building interactive learning experiences.",
+  "theme": "almond",
+  "primaryColor": "#4F46E5",
+  "lightColor": "#EEF2FF",
+  "darkColor": "#3730A3",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": ["introduction", "quickstart", "project-structure"]
+          },
+          {
+            "group": "Core Features",
+            "pages": [
+              "features/api-server",
+              "features/database",
+              "features/frontend",
+              "features/mockup-sandbox"
+            ]
+          },
+          {
+            "group": "Development",
+            "pages": [
+              "development/setup",
+              "development/typescript",
+              "development/codegen",
+              "development/scripts"
+            ]
+          },
+          {
+            "group": "Deployment",
+            "pages": [
+              "deployment/build",
+              "deployment/database-migrations",
+              "deployment/environment"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Overview",
+            "pages": ["api-reference/overview", "api-reference/authentication"]
+          },
+          {
+            "group": "Endpoints",
+            "pages": ["api-reference/endpoints/health"]
+          },
+          {
+            "group": "Client Libraries",
+            "pages": [
+              "api-reference/client/react-query-hooks",
+              "api-reference/client/zod-schemas"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Express 5 API server with OpenAPI 3.1 specification",
+    "Automatic code generation via Orval (React Query hooks + Zod schemas)",
+    "PostgreSQL database with Drizzle ORM",
+    "React frontend with shadcn/ui component library",
+    "pnpm monorepo with TypeScript composite projects",
+    "Interactive Pi Day educational app with visualizations and memory games",
+    "Component preview sandbox for UI development",
+    "esbuild production bundling"
+  ],
+  "publicApiSurface": [
+    "GET /api/healthz — Health check endpoint",
+    "useHealthCheck() — React Query hook",
+    "healthCheck() — Fetch client function",
+    "HealthCheckResponse — Zod schema",
+    "HealthStatus — TypeScript interface",
+    "@workspace/db — Drizzle ORM client and schema exports",
+    "@workspace/api-zod — Generated Zod validation schemas",
+    "@workspace/api-client-react — Generated React Query hooks"
+  ]
+}
