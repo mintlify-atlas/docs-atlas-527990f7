@@ -1,0 +1,36 @@
+---
+title: Authentication
+description: Authentication requirements for the EduLearn Hub API
+---
+
+<Info>
+  The EduLearn Hub API is currently at **v0.1.0** and is in active early-stage development. No authentication is required to call any endpoint at this time.
+</Info>
+
+## Current state (v0.1.0)
+
+All endpoints in the current API version are **public** and require no credentials:
+
+- `GET /api/healthz` — publicly accessible, no token needed
+
+You can call any endpoint directly without setting an `Authorization` header.
+
+## Future authentication
+
+When authentication is introduced in a future version, the API will follow the standard **Bearer token (JWT)** pattern:
+
+```http
+GET /api/healthz HTTP/1.1
+Host: example.com
+Authorization: Bearer <your-jwt-token>
+```
+
+At that point:
+
+- Protected endpoints will return `401 Unauthorized` if the header is missing or the token is invalid.
+- Token acquisition details (e.g. login endpoint, OAuth flow) will be documented here.
+- The `@workspace/api-client-react` custom fetch layer (`custom-fetch.ts`) is the right place to inject the `Authorization` header globally for all generated hooks.
+
+<Note>
+  Until authentication is added, there is no need to configure credentials in the React Query client or the Zod validation layer.
+</Note>

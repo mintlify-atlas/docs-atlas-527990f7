@@ -1,0 +1,51 @@
+---
+title: API overview
+description: Overview of the EduLearn Hub REST API
+---
+
+The EduLearn Hub API is a REST API that returns JSON responses. It is built spec-first: the OpenAPI specification in `lib/api-spec/openapi.yaml` is the single source of truth, and all server validation, client hooks, and Zod schemas are generated from it.
+
+## Key details
+
+| Property | Value |
+|---|---|
+| Version | `0.1.0` |
+| Base URL | `/api` |
+| Response format | `application/json` |
+| Auth required | No (v0.1.0) |
+
+## Spec-first approach
+
+All code artifacts are generated from the OpenAPI spec using [Orval](https://orval.dev):
+
+- **`@workspace/api-zod`** — Zod validation schemas used by the API server at runtime
+- **`@workspace/api-client-react`** — React Query hooks and TypeScript types for frontend consumers
+
+To view the full specification, open:
+
+```
+lib/api-spec/openapi.yaml
+```
+
+## Available endpoints
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/api/healthz` | Returns server health status |
+
+## Explore the API
+
+<CardGroup cols={2}>
+  <Card title="Health check" icon="heart-pulse" href="/api-reference/endpoints/health">
+    `GET /api/healthz` — Verify the API server is running and healthy.
+  </Card>
+  <Card title="Authentication" icon="lock" href="/api-reference/authentication">
+    Learn about current auth requirements and what to expect in future versions.
+  </Card>
+  <Card title="React Query hooks" icon="react" href="/api-reference/client/react-query-hooks">
+    Auto-generated hooks for fetching API data in React applications.
+  </Card>
+  <Card title="Zod schemas" icon="shield-check" href="/api-reference/client/zod-schemas">
+    Auto-generated Zod schemas for runtime validation.
+  </Card>
+</CardGroup>

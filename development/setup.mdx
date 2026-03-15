@@ -1,0 +1,104 @@
+---
+title: Development setup
+description: Set up your local development environment for EduLearn Hub
+---
+
+## Prerequisites
+
+Before you begin, make sure you have the following installed:
+
+- **Node.js 24** — the runtime version used across the monorepo
+- **pnpm** — the package manager; other package managers are blocked by the root `preinstall` script
+- **PostgreSQL** — required by `@workspace/db` and the API server at runtime
+
+## Initial setup
+
+<Steps>
+  <Step title="Clone the repository">
+    ```bash
+    git clone <repo-url> edulearn-hub
+    cd edulearn-hub
+    ```
+  </Step>
+
+  <Step title="Install dependencies">
+    Run pnpm from the repo root. It installs all workspace packages in one pass.
+
+    ```bash
+    pnpm install
+    ```
+  </Step>
+
+  <Step title="Configure environment variables">
+    Create a `.env` file at the repo root (or export the variable in your shell). The
+    minimum required variable is:
+
+    ```bash
+    DATABASE_URL=postgres://user:password@localhost:5432/edulearn
+    ```
+
+    `@workspace/db` reads `DATABASE_URL` at startup. The API server and any script that
+    imports `@workspace/db` will fail to connect without it.
+  </Step>
+
+  <Step title="Run the initial typecheck">
+    Build the TypeScript declaration files for all library packages before starting any
+    service:
+
+    ```bash
+    pnpm run typecheck
+    ```
+
+    This runs `tsc --build` across the full project reference graph so that cross-package
+    imports resolve correctly.
+  </Step>
+</Steps>
+
+## Starting services in development
+
+Each service has its own `dev` script. Run them in separate terminal windows:
+
+<CodeGroup>
+
+```bash API server
+pnpm --filter @workspace/api-server run dev
+```
+
+```bash pi-day (React/Vite frontend)
+pnpm --filter @workspace/pi-day run dev
+```
+
+```bash mockup-sandbox (React/Vite)
+pnpm --filter @workspace/mockup-sandbox run dev
+```
+
+</CodeGroup>
+
+The API server reads the `PORT` environment variable and defaults to Express 5 on that
+port. The Vite frontends bind to `0.0.0.0` so they are reachable from outside the
+container or VM.
+
+## Typecheck and build
+
+To typecheck the whole monorepo:
+
+```bash
+pnpm run typecheck
+```
+
+To produce a full production build (runs typecheck first, then builds all packages that
+define a `build` script):
+
+```bash
+pnpm run build
+```
+
+The API server build outputs a CJS bundle at `artifacts/api-server/dist/index.cjs` via
+esbuild.
+
+<Tip>
+  Always run `pnpm run typecheck` from the **repo root**, not from inside an individual
+  package. The root command uses TypeScript project references to build the full dependency
+  graph in order. Running `tsc` inside a single package skips that graph and will fail if
+  upstream `.d.ts` files have not been generated yet.
+</Tip>

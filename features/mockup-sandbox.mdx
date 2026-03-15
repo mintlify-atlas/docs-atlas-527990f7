@@ -1,0 +1,135 @@
+---
+title: Mockup sandbox
+description: Vite-powered component preview server for UI development
+---
+
+The mockup sandbox (`@workspace/mockup-sandbox`) is a standalone Vite application that renders individual React components in isolation. It is designed to be used during UI development — drop a component file into the `mockups/` directory and immediately preview it in the browser without wiring it into any app.
+
+## How it works
+
+When the dev server starts, the `mockupPreviewPlugin` scans `src/components/mockups/` for `.tsx` files and generates a module map at `src/.generated/mockup-components.ts`. This map is imported by `App.tsx` at runtime and used to lazy-load whichever component is requested by the current URL.
+
+The app has two modes:
+
+- **Preview mode** — when the URL matches `/preview/<path>`, the matching component is loaded and rendered full-screen.
+- **Gallery mode** — when no preview path is matched, a landing page is shown with the URL pattern to use.
+
+## URL pattern
+
+Navigate to `/preview/ComponentName` to render a component located at `src/components/mockups/ComponentName.tsx`.
+
+Sub-directories are supported:
+
+```
+/preview/cards/CourseCard
+  → src/components/mockups/cards/CourseCard.tsx
+```
+
+Files and directories whose names begin with `_` are excluded from discovery.
+
+## Component resolution
+
+When a module is loaded, `_resolveComponent()` picks the component to render using this priority order:
+
+```ts src/App.tsx
+function _resolveComponent(
+  mod: Record<string, unknown>,
+  name: string,
+): ComponentType | undefined {
+  const fns = Object.values(mod).filter(
+    (v) => typeof v === "function",
+  ) as ComponentType[];
+  return (
+    (mod.default as ComponentType) ||     // 1. default export
+    (mod.Preview as ComponentType) ||     // 2. named export "Preview"
+    (mod[name] as ComponentType) ||       // 3. named export matching filename
+    fns[fns.length - 1]                   // 4. last exported function
+  );
+}
+```
+
+The simplest mockup file is just a default export:
+
+```tsx src/components/mockups/CourseCard.tsx
+export default function CourseCard() {
+  return (
+    <div className="p-6 border rounded-xl max-w-sm">
+      <h2 className="text-lg font-semibold">Introduction to Pi</h2>
+      <p className="text-sm text-muted-foreground mt-1">Learn about the world's most famous constant.</p>
+    </div>
+  );
+}
+```
+
+You can also export a named `Preview` component if you want to keep the real component and its mockup in the same file:
+
+```tsx src/components/mockups/CourseCard.tsx
+import { CourseCard } from "@/components/CourseCard";
+
+export function Preview() {
+  return (
+    <div className="p-8 bg-background">
+      <CourseCard
+        title="Introduction to Pi"
+        description="Learn about the world's most famous constant."
+        progress={42}
+      />
+    </div>
+  );
+}
+```
+
+## The mockupPreviewPlugin
+
+The Vite plugin (`mockupPreviewPlugin.ts`) handles auto-discovery and hot-reload:
+
+- On **build start**, it runs a `fast-glob` scan of `src/components/mockups/**/*.tsx` and writes the generated module map.
+- During **dev server** mode, it additionally starts a `chokidar` file watcher on the mockups directory. When files are added or removed, the module map is regenerated automatically — no manual restart needed.
+- A **middleware** intercepts 404 responses for paths inside `/components/mockups/` or `/.generated/mockup-components` and triggers a rescan, handling cases where Vite's module graph is ahead of the file system.
+
+```ts mockupPreviewPlugin.ts (excerpt)
+const MOCKUPS_DIR = "src/components/mockups";
+const GENERATED_MODULE = "src/.generated/mockup-components.ts";
+```
+
+<Info>
+  The generated file at `src/.generated/mockup-components.ts` is created at
+  build/dev time and should be excluded from version control. Add
+  `src/.generated/` to your `.gitignore`.
+</Info>
+
+## Creating a mockup
+
+<Steps>
+  <Step title="Add a file to the mockups directory">
+    Create `src/components/mockups/MyComponent.tsx` with any React component
+    as the default export. The plugin will detect the new file within
+    milliseconds and update the module map.
+  </Step>
+
+  <Step title="Open the preview URL">
+    Navigate to `/preview/MyComponent` in the browser. The component renders
+    full-screen with no surrounding chrome.
+  </Step>
+
+  <Step title="Iterate">
+    Edit the mockup file and save. Vite HMR will hot-reload the preview
+    instantly.
+  </Step>
+</Steps>
+
+## Running the dev server
+
+```bash
+pnpm --filter @workspace/mockup-sandbox run dev
+```
+
+## Other scripts
+
+```bash
+# Production build
+pnpm --filter @workspace/mockup-sandbox run build
+
+# Type-check without emitting files
+pnpm --filter @workspace/mockup-sandbox run typecheck
+```

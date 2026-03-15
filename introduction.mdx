@@ -1,0 +1,75 @@
+---
+title: Introduction
+description: EduLearn Hub — a full-stack educational platform monorepo built with TypeScript, Express, and React.
+---
+
+# Welcome to EduLearn Hub
+
+EduLearn Hub is a full-stack educational platform built as a **pnpm monorepo** using TypeScript throughout. It provides an Express 5 API server, a PostgreSQL database layer with Drizzle ORM, generated client libraries, and interactive React-based learning experiences.
+
+<CardGroup cols={2}>
+  <Card title="Quickstart" icon="rocket" href="/quickstart">
+    Get the project running locally in minutes
+  </Card>
+  <Card title="Project Structure" icon="folder-tree" href="/project-structure">
+    Understand the monorepo layout and package responsibilities
+  </Card>
+  <Card title="API Server" icon="server" href="/features/api-server">
+    Learn how the Express 5 API server is organized
+  </Card>
+  <Card title="API Reference" icon="code" href="/api-reference/overview">
+    Explore the full API endpoints and client libraries
+  </Card>
+</CardGroup>
+
+## What's included
+
+EduLearn Hub is organized as a monorepo with clearly separated concerns across deployable artifacts and shared libraries.
+
+### Artifacts
+
+| Package | Description |
+|---------|-------------|
+| `@workspace/api-server` | Express 5 REST API server with OpenAPI 3.1 specification |
+| `@workspace/mockup-sandbox` | Vite-powered React component preview server for UI development |
+| `@workspace/pi-day` | Interactive Pi Day educational app with visualizations and memory games |
+
+### Shared Libraries
+
+| Package | Description |
+|---------|-------------|
+| `@workspace/api-spec` | OpenAPI 3.1 spec (`openapi.yaml`) and Orval codegen configuration |
+| `@workspace/api-client-react` | Generated React Query hooks and fetch client |
+| `@workspace/api-zod` | Generated Zod validation schemas from the OpenAPI spec |
+| `@workspace/db` | Drizzle ORM schema definitions and PostgreSQL client |
+
+## Tech stack
+
+<CardGroup cols={3}>
+  <Card title="Express 5" icon="bolt">
+    Modern Node.js API framework with async/await support
+  </Card>
+  <Card title="Drizzle ORM" icon="database">
+    Type-safe PostgreSQL queries with schema-first design
+  </Card>
+  <Card title="React Query" icon="arrows-rotate">
+    Auto-generated hooks for server state management
+  </Card>
+  <Card title="Zod" icon="shield-check">
+    Runtime schema validation from OpenAPI spec
+  </Card>
+  <Card title="Orval" icon="wand-magic-sparkles">
+    Code generation from OpenAPI into typed clients
+  </Card>
+  <Card title="TypeScript" icon="code">
+    Strict typing with composite project references
+  </Card>
+</CardGroup>
+
+## Key design principles
+
+**Single source of truth for the API** — The OpenAPI spec in `lib/api-spec/openapi.yaml` is the authoritative definition. All Zod schemas and React Query hooks are auto-generated from it via Orval. Never edit generated files directly.
+
+**Type safety at every layer** — From database schema (Drizzle) to API validation (Zod) to frontend data fetching (React Query + TypeScript), the entire stack is strongly typed.
+
+**Monorepo with composite TypeScript** — Each package uses TypeScript's `composite` mode and project references so cross-package imports resolve correctly. Always typecheck from the root.

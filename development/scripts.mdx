@@ -1,0 +1,128 @@
+---
+title: Utility scripts
+description: Running utility scripts with the @workspace/scripts package
+---
+
+The `scripts` directory is a dedicated pnpm workspace package (`@workspace/scripts`) for
+one-off utility scripts — database seeds, data migrations, reporting tasks, or anything
+else that doesn't belong in a deployable artifact.
+
+## How scripts work
+
+Each `.ts` file in `scripts/src/` has a corresponding entry in `scripts/package.json`.
+The script is executed directly with `tsx`, so there is no compile step.
+
+```json scripts/package.json
+{
+  "name": "@workspace/scripts",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "hello": "tsx ./src/hello.ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "tsx": "catalog:"
+  }
+}
+```
+
+## Running a script
+
+```bash
+pnpm --filter @workspace/scripts run <script-name>
+```
+
+For example, to run the built-in `hello` script:
+
+```bash
+pnpm --filter @workspace/scripts run hello
+```
+
+## Using workspace packages in scripts
+
+Scripts can import any other workspace package. Add the package as a dependency in
+`scripts/package.json` first, then run `pnpm install`.
+
+For example, to use the database layer:
+
+```json scripts/package.json (excerpt)
+{
+  "dependencies": {
+    "@workspace/db": "workspace:*"
+  }
+}
+```
+
+Then import it in your script:
+
+```typescript scripts/src/seed-courses.ts
+import { db } from "@workspace/db";
+
+const courses = [
+  { id: "cs101", title: "Introduction to Computer Science" },
+  { id: "math201", title: "Linear Algebra" },
+];
+
+for (const course of courses) {
+  await db.insert(schema.courses).values(course).onConflictDoNothing();
+}
+
+console.log("Seeded", courses.length, "courses");
+```
+
+<Note>
+  Scripts that import `@workspace/db` require the `DATABASE_URL` environment variable to
+  be set. See the [development setup](/development/setup) page for details.
+</Note>
+
+## Adding a new script
+
+<Steps>
+  <Step title="Create the script file">
+    Add a new `.ts` file in `scripts/src/`:
+
+    ```typescript scripts/src/my-task.ts
+    console.log("Running my-task");
+    // Your logic here
+    ```
+  </Step>
+
+  <Step title="Register it in package.json">
+    Add an entry to the `scripts` section of `scripts/package.json`:
+
+    ```json
+    {
+      "scripts": {
+        "hello": "tsx ./src/hello.ts",
+        "my-task": "tsx ./src/my-task.ts"
+      }
+    }
+    ```
+  </Step>
+
+  <Step title="Add workspace dependencies (if needed)">
+    If your script imports a workspace package that isn't already a dependency, add it
+    and re-install:
+
+    ```json
+    {
+      "dependencies": {
+        "@workspace/db": "workspace:*"
+      }
+    }
+    ```
+
+    ```bash
+    pnpm install
+    ```
+  </Step>
+
+  <Step title="Run the script">
+    ```bash
+    pnpm --filter @workspace/scripts run my-task
+    ```
+  </Step>
+</Steps>

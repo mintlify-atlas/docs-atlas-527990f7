@@ -1,0 +1,83 @@
+---
+title: Health check
+description: GET /api/healthz — Check API server health status
+---
+
+Returns the health status of the API server. Use this endpoint to verify the server is reachable and running correctly.
+
+## Request
+
+**Method:** `GET`  
+**Path:** `/api/healthz`  
+**Auth required:** No  
+**Request body:** None  
+**Query parameters:** None  
+
+## Response
+
+**Status:** `200 OK`
+
+<ResponseField name="status" type="string" required>
+  Health status string. Value is `"ok"` when the server is healthy.
+</ResponseField>
+
+### Response example
+
+```json
+{ "status": "ok" }
+```
+
+## Examples
+
+<CodeGroup>
+
+```bash cURL
+curl -X GET http://localhost:3000/api/healthz
+```
+
+```ts React Query hook
+import { useHealthCheck } from "@workspace/api-client-react";
+
+function StatusBadge() {
+  const { data, isLoading } = useHealthCheck();
+
+  if (isLoading) return <span>Checking…</span>;
+  return <span>{data?.status}</span>;
+}
+```
+
+</CodeGroup>
+
+## Route handler
+
+The handler is defined in `artifacts/api-server/src/routes/health.ts`. It uses `HealthCheckResponse.parse()` from `@workspace/api-zod` to validate the response before sending it:
+
+```ts
+import { Router, type IRouter } from "express";
+import { HealthCheckResponse } from "@workspace/api-zod";
+
+const router: IRouter = Router();
+
+router.get("/healthz", (_req, res) => {
+  const data = HealthCheckResponse.parse({ status: "ok" });
+  res.json(data);
+});
+
+export default router;
+```
+
+## Zod schema
+
+The `HealthCheckResponse` schema used for server-side validation is generated into `@workspace/api-zod`:
+
+```ts
+import * as zod from "zod";
+
+export const HealthCheckResponse = zod.object({
+  status: zod.string(),
+});
+```
+
+<Note>
+  `HealthCheckResponse` maps directly to the `HealthStatus` component schema in `lib/api-spec/openapi.yaml`.
+</Note>

@@ -1,0 +1,139 @@
+---
+title: API server
+description: The Express 5 REST API server — routing, middleware, and validation
+---
+
+The API server is an [Express 5](https://expressjs.com/) application written in TypeScript. It exposes a REST API under the `/api` path and uses shared Zod schemas from `@workspace/api-zod` to validate all responses.
+
+## Architecture overview
+
+The entry point (`src/index.ts`) reads a required `PORT` environment variable and starts the HTTP listener. The Express application itself is defined in `src/app.ts`:
+
+```ts src/app.ts
+import express, { type Express } from "express";
+import cors from "cors";
+import router from "./routes";
+
+const app: Express = express();
+
+app.use(cors());
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
+app.use("/api", router);
+
+export default app;
+```
+
+The middleware stack is applied in this order:
+
+1. **`cors()`** — allows cross-origin requests from any origin
+2. **`express.json()`** — parses `application/json` request bodies
+3. **`express.urlencoded`** — parses `application/x-www-form-urlencoded` bodies
+4. **`router`** — all application routes, mounted under `/api`
+
+<Note>
+  Every route in this server is prefixed with `/api`. For example, the health
+  check is available at `/api/healthz`, not `/healthz`.
+</Note>
+
+## Routes directory structure
+
+The `src/routes/` directory contains one file per feature area. The barrel file `src/routes/index.ts` creates a single Express `Router` and mounts each sub-router on it:
+
+```ts src/routes/index.ts
+import { Router, type IRouter } from "express";
+import healthRouter from "./health";
+
+const router: IRouter = Router();
+
+router.use(healthRouter);
+
+export default router;
+```
+
+Each sub-router file exports a default `IRouter` instance with its own set of route handlers.
+
+## Route example: health check
+
+The health route demonstrates the standard pattern for writing routes with Zod response validation:
+
+```ts src/routes/health.ts
+import { Router, type IRouter } from "express";
+import { HealthCheckResponse } from "@workspace/api-zod";
+
+const router: IRouter = Router();
+
+router.get("/healthz", (_req, res) => {
+  const data = HealthCheckResponse.parse({ status: "ok" });
+  res.json(data);
+});
+
+export default router;
+```
+
+`HealthCheckResponse` is a Zod schema exported from `@workspace/api-zod`. Calling `.parse()` before sending the response ensures the shape of every response is validated against the shared contract at runtime — if the data doesn't match the schema, Zod throws before anything is sent to the client.
+
+## Adding a new route
+
+<Steps>
+  <Step title="Create the router file">
+    Add a new file at `src/routes/<feature>.ts`. Follow the same pattern as
+    `health.ts`: create a `Router`, define your handlers, and export it as the
+    default export.
+
+    ```ts src/routes/courses.ts
+    import { Router, type IRouter } from "express";
+    import { CoursesListResponse } from "@workspace/api-zod";
+
+    const router: IRouter = Router();
+
+    router.get("/courses", async (_req, res) => {
+      // fetch data ...
+      const data = CoursesListResponse.parse(courses);
+      res.json(data);
+    });
+
+    export default router;
+    ```
+  </Step>
+
+  <Step title="Add the Zod schema">
+    Define `CoursesListResponse` (and any related schemas) in the
+    `@workspace/api-zod` package so the response shape is shared between the
+    server and any API clients.
+  </Step>
+
+  <Step title="Mount the router in routes/index.ts">
+    Import your new router and register it with `router.use()`:
+
+    ```ts src/routes/index.ts
+    import { Router, type IRouter } from "express";
+    import healthRouter from "./health";
+    import coursesRouter from "./courses";
+
+    const router: IRouter = Router();
+
+    router.use(healthRouter);
+    router.use(coursesRouter);
+
+    export default router;
+    ```
+  </Step>
+</Steps>
+
+## Running the dev server
+
+```bash
+pnpm --filter @workspace/api-server run dev
+```
+
+This uses `tsx` to run `src/index.ts` directly without a build step. The `PORT` environment variable must be set before starting the server.
+
+## Building for production
+
+```bash
+pnpm --filter @workspace/api-server run build
+```
+
+The build script (`build.ts`) uses esbuild to bundle the application into a single `dist/index.cjs` file. Most dependencies are bundled inline to reduce cold-start time; a small set of packages that are not bundle-compatible are marked as external and must be present in `node_modules` at runtime.

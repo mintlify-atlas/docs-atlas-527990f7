@@ -1,0 +1,182 @@
+---
+title: Building for production
+description: How to build EduLearn Hub artifacts for production deployment
+---
+
+EduLearn Hub uses a monorepo build pipeline that typechecks all packages first, then produces optimized production bundles for each artifact.
+
+<Note>
+  `pnpm run build` always runs `typecheck` before building. This ensures TypeScript errors across all packages are caught before any bundling begins.
+</Note>
+
+## Full build process
+
+<Steps>
+  <Step title="Install dependencies">
+    From the repo root, install all workspace dependencies:
+
+    ```bash
+    pnpm install
+    ```
+  </Step>
+
+  <Step title="Run the root build command">
+    The root `build` script typechecks the entire project and then recursively builds every package that defines a `build` script:
+
+    ```bash
+    pnpm run build
+    ```
+
+    This is equivalent to:
+
+    ```bash
+    pnpm run typecheck && pnpm -r --if-present run build
+    ```
+  </Step>
+
+  <Step title="Start the production API server">
+    After a successful build, launch the API server from its output bundle:
+
+    ```bash
+    node artifacts/api-server/dist/index.cjs
+    ```
+  </Step>
+</Steps>
+
+---
+
+## API server build
+
+The API server (`@workspace/api-server`) is bundled with [esbuild](https://esbuild.github.io/) into a single CommonJS file at `dist/index.cjs`.
+
+Build it individually:
+
+```bash
+pnpm --filter @workspace/api-server run build
+```
+
+### How bundling works
+
+The build script (`build.ts`) reads `package.json` to enumerate all declared dependencies, then splits them into two groups:
+
+- **Bundled** — packages on the `allowlist` are inlined into `dist/index.cjs`. This reduces filesystem `open` syscalls at startup, improving cold-start performance.
+- **Externalized** — all other dependencies are left as `require()` calls and must be present in `node_modules` at runtime.
+
+Here is the full `build.ts`:
+
+```ts
+import path from "path";
+import { fileURLToPath } from "url";
+import { build as esbuild } from "esbuild";
+import { rm, readFile } from "fs/promises";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// server deps to bundle to reduce openat(2) syscalls
+// which helps cold start times without risking some
+// packages that are not bundle compatible
+const allowlist = [
+  "@google/generative-ai",
+  "axios",
+  "connect-pg-simple",
+  "cors",
+  "date-fns",
+  "drizzle-orm",
+  "drizzle-zod",
+  "express",
+  "express-rate-limit",
+  "express-session",
+  "jsonwebtoken",
+  "memorystore",
+  "multer",
+  "nanoid",
+  "nodemailer",
+  "openai",
+  "passport",
+  "passport-local",
+  "pg",
+  "stripe",
+  "uuid",
+  "ws",
+  "xlsx",
+  "zod",
+  "zod-validation-error",
+];
+
+async function buildAll() {
+  const distDir = path.resolve(__dirname, "dist");
+  await rm(distDir, { recursive: true, force: true });
+
+  console.log("building server...");
+  const pkgPath = path.resolve(__dirname, "package.json");
+  const pkg = JSON.parse(await readFile(pkgPath, "utf-8"));
+  const allDeps = [
+    ...Object.keys(pkg.dependencies || {}),
+    ...Object.keys(pkg.devDependencies || {}),
+  ];
+  const externals = allDeps.filter(
+    (dep) =>
+      !allowlist.includes(dep) &&
+      !(pkg.dependencies?.[dep]?.startsWith("workspace:")),
+  );
+
+  await esbuild({
+    entryPoints: [path.resolve(__dirname, "src/index.ts")],
+    platform: "node",
+    bundle: true,
+    format: "cjs",
+    outfile: path.resolve(distDir, "index.cjs"),
+    define: {
+      "process.env.NODE_ENV": '"production"',
+    },
+    minify: true,
+    external: externals,
+    logLevel: "info",
+  });
+}
+
+buildAll().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});
+```
+
+### Build output
+
+| File | Description |
+|------|-------------|
+| `artifacts/api-server/dist/index.cjs` | Minified CJS bundle, ready to run with `node` |
+
+<Info>
+  Workspace packages (prefixed `workspace:`) are always bundled — they are not treated as externals regardless of the allowlist.
+</Info>
+
+---
+
+## Frontend builds
+
+Both frontend artifacts use [Vite](https://vite.dev/) and can be built individually or as part of the root `pnpm run build`.
+
+<CodeGroup>
+
+```bash pi-day
+pnpm --filter @workspace/pi-day run build
+```
+
+```bash mockup-sandbox
+pnpm --filter @workspace/mockup-sandbox run build
+```
+
+</CodeGroup>
+
+### Output directories
+
+| Artifact | Output directory |
+|----------|------------------|
+| `@workspace/pi-day` | `artifacts/pi-day/dist/public` |
+| `@workspace/mockup-sandbox` | `artifacts/mockup-sandbox/dist` |
+
+<Note>
+  Both Vite configs require `PORT` and `BASE_PATH` environment variables to be set at build time. See [Environment variables](/deployment/environment) for details.
+</Note>

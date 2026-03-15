@@ -1,0 +1,140 @@
+---
+title: Environment variables
+description: Required and optional environment variables for EduLearn Hub
+---
+
+EduLearn Hub reads configuration from environment variables at runtime. The table below documents every variable used across the monorepo.
+
+<Warning>
+  Never commit `.env` files to version control. Add `.env` to your `.gitignore` and keep secrets out of the repository.
+</Warning>
+
+---
+
+## Variable reference
+
+| Variable | Required | Used by | Description | Example |
+|----------|----------|---------|-------------|---------|
+| `DATABASE_URL` | Required | `@workspace/db`, `@workspace/api-server` | PostgreSQL connection string | `postgresql://user:password@localhost:5432/edulearn` |
+| `PORT` | Required | `@workspace/api-server`, `@workspace/pi-day`, `@workspace/mockup-sandbox` | Port the server or Vite dev server listens on | `3000` |
+| `BASE_PATH` | Required (frontends) | `@workspace/pi-day`, `@workspace/mockup-sandbox` | Base URL path for Vite's `base` config option | `/app` |
+
+---
+
+## Variable details
+
+### `DATABASE_URL`
+
+A standard PostgreSQL connection string. Required by `@workspace/db` (Drizzle client and Drizzle Kit) and transitively by `@workspace/api-server`.
+
+The `@workspace/db` package throws at startup if this variable is missing:
+
+```ts
+if (!process.env.DATABASE_URL) {
+  throw new Error("DATABASE_URL, ensure the database is provisioned");
+}
+```
+
+**Format:**
+
+```
+postgresql://<user>:<password>@<host>:<port>/<database>
+```
+
+**Examples:**
+
+```bash
+# Local development
+DATABASE_URL="postgresql://postgres:postgres@localhost:5432/edulearn_dev"
+
+# With SSL (typical for hosted databases)
+DATABASE_URL="postgresql://user:password@db.example.com:5432/edulearn?sslmode=require"
+```
+
+---
+
+### `PORT`
+
+The port number the process will bind to. Required — all server and frontend entry points validate this variable at startup and throw if it is absent or not a valid positive integer.
+
+From `artifacts/api-server/src/index.ts`:
+
+```ts
+const rawPort = process.env["PORT"];
+
+if (!rawPort) {
+  throw new Error(
+    "PORT environment variable is required but was not provided.",
+  );
+}
+
+const port = Number(rawPort);
+
+if (Number.isNaN(port) || port <= 0) {
+  throw new Error(`Invalid PORT value: "${rawPort}"`);
+}
+
+app.listen(port, () => {
+  console.log(`Server listening on port ${port}`);
+});
+```
+
+The same validation pattern is used in the Vite configs for `@workspace/pi-day` and `@workspace/mockup-sandbox`.
+
+---
+
+### `BASE_PATH`
+
+Sets the [`base`](https://vite.dev/config/shared-options.html#base) option in the Vite config for the frontend artifacts. This controls the root path at which the app is served. Required for both `@workspace/pi-day` and `@workspace/mockup-sandbox` at dev and build time.
+
+---
+
+## Local development setup
+
+<Steps>
+  <Step title="Create a .env file">
+    Create a `.env` file at the repo root (or inside the package directory if you prefer per-package env files):
+
+    ```bash
+    # .env
+    DATABASE_URL="postgresql://postgres:postgres@localhost:5432/edulearn_dev"
+    PORT=3000
+    BASE_PATH=/
+    ```
+  </Step>
+
+  <Step title="Load the .env file">
+    Use a tool like [`dotenv-cli`](https://github.com/entropitor/dotenv-cli) or your shell's built-in `source` to load the variables before running any commands:
+
+    ```bash
+    # Using dotenv-cli
+    dotenv -- pnpm --filter @workspace/api-server run dev
+
+    # Or export manually in your shell
+    export $(cat .env | xargs)
+    ```
+  </Step>
+
+  <Step title="Verify the database connection">
+    Run the database push to confirm `DATABASE_URL` is correct and the database is reachable:
+
+    ```bash
+    pnpm --filter @workspace/db run push
+    ```
+  </Step>
+</Steps>
+
+---
+
+## Development vs production
+
+| Concern | Development | Production |
+|---------|-------------|------------|
+| `DATABASE_URL` | Local PostgreSQL or dev instance | Provided by hosting platform (e.g. Replit) |
+| `PORT` | Any free local port (e.g. `3000`) | Assigned by the hosting platform |
+| `BASE_PATH` | Typically `/` | Configured per deployment |
+| `.env` file | Used locally to set variables | Never deployed — use platform secret management |
+
+<Info>
+  On Replit, `DATABASE_URL` is provisioned and injected automatically. You do not need to set it manually in the Replit environment.
+</Info>

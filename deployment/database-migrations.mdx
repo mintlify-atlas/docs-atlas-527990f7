@@ -1,0 +1,110 @@
+---
+title: Database migrations
+description: Managing PostgreSQL schema changes with Drizzle Kit
+---
+
+EduLearn Hub uses [Drizzle Kit](https://orm.drizzle.team/kit-docs/overview) to manage database schema changes. The `@workspace/db` package owns the schema definitions and the Drizzle Kit configuration.
+
+<Warning>
+  `drizzle-kit push` is intended for **development only**. It applies schema changes directly to the target database without generating migration files. Do not use it against a production database — production migrations are handled automatically by Replit on publish.
+</Warning>
+
+---
+
+## How it works
+
+Drizzle Kit compares your local schema (TypeScript table definitions in `src/schema/`) against the live database and generates the SQL needed to reconcile them. The `push` command applies that SQL immediately.
+
+The Drizzle Kit config (`drizzle.config.ts`) reads `DATABASE_URL` from the environment and points at the schema barrel export:
+
+```ts
+import { defineConfig } from "drizzle-kit";
+import path from "path";
+
+if (!process.env.DATABASE_URL) {
+  throw new Error("DATABASE_URL, ensure the database is provisioned");
+}
+
+export default defineConfig({
+  schema: path.join(__dirname, "./src/schema/index.ts"),
+  dialect: "postgresql",
+  dbCredentials: {
+    url: process.env.DATABASE_URL,
+  },
+});
+```
+
+---
+
+## Development migration workflow
+
+<Steps>
+  <Step title="Set DATABASE_URL">
+    Ensure `DATABASE_URL` is set in your environment or `.env` file before running any Drizzle Kit commands:
+
+    ```bash
+    export DATABASE_URL="postgresql://user:password@localhost:5432/edulearn"
+    ```
+
+    See [Environment variables](/deployment/environment) for the full format reference.
+  </Step>
+
+  <Step title="Define or update your schema">
+    Add or modify table definitions in `lib/db/src/schema/`. Each model lives in its own file (e.g. `src/schema/users.ts`) and is re-exported from `src/schema/index.ts`.
+
+    Example table definition:
+
+    ```ts
+    import { pgTable, serial, text, timestamp } from "drizzle-orm/pg-core";
+
+    export const users = pgTable("users", {
+      id: serial("id").primaryKey(),
+      email: text("email").notNull().unique(),
+      createdAt: timestamp("created_at").defaultNow().notNull(),
+    });
+    ```
+  </Step>
+
+  <Step title="Push the schema to the database">
+    Run the push command from the repo root:
+
+    ```bash
+    pnpm --filter @workspace/db run push
+    ```
+
+    This runs `drizzle-kit push --config ./drizzle.config.ts` inside `lib/db`.
+  </Step>
+
+  <Step title="Resolve confirmation prompts (if needed)">
+    Some schema changes (e.g. dropping a column, renaming a table) require Drizzle Kit to prompt for confirmation. If the push stalls waiting for input, use the force variant instead:
+
+    ```bash
+    pnpm --filter @workspace/db run push-force
+    ```
+
+    This runs `drizzle-kit push --force`, bypassing all interactive prompts.
+  </Step>
+
+  <Step title="Verify the changes">
+    Connect to your database and confirm the schema looks correct:
+
+    ```bash
+    psql $DATABASE_URL -c "\dt"
+    ```
+  </Step>
+</Steps>
+
+---
+
+## Available scripts
+
+| Script | Command | When to use |
+|--------|---------|-------------|
+| `push` | `drizzle-kit push --config ./drizzle.config.ts` | Standard development schema sync |
+| `push-force` | `drizzle-kit push --force --config ./drizzle.config.ts` | When push requires confirmation for destructive changes |
+
+---
+
+## Production migrations
+
+In production, schema migrations are handled automatically by Replit when the project is published. You do not need to run `push` against the production database manually.

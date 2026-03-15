@@ -1,0 +1,251 @@
+---
+title: API code generation
+description: How Orval generates React Query hooks and Zod schemas from the OpenAPI spec
+---
+
+EduLearn Hub uses [Orval](https://orval.dev) to generate type-safe client code directly
+from the OpenAPI specification. Editing the spec and re-running codegen keeps the
+frontend client and server validation schemas in sync automatically.
+
+## Pipeline overview
+
+```
+lib/api-spec/openapi.yaml
+        │
+        ▼
+   Orval codegen
+   (orval.config.ts)
+        │
+        ├──▶  lib/api-client-react/src/generated/
+        │         api.ts              ← React Query hooks + fetch functions
+        │         api.schemas.ts      ← TypeScript interfaces
+        │
+        └──▶  lib/api-zod/src/generated/
+                  api.ts              ← Zod schemas
+                  types/              ← TypeScript types
+```
+
+## Running codegen
+
+```bash
+pnpm --filter @workspace/api-spec run codegen
+```
+
+This runs `orval --config ./orval.config.ts` inside `lib/api-spec`.
+
+<Warning>
+  Never edit files inside `lib/api-client-react/src/generated/` or
+  `lib/api-zod/src/generated/` by hand. They are overwritten every time codegen runs.
+  Put any customisations in non-generated files (e.g. `custom-fetch.ts`) and wire them
+  in through the Orval config.
+</Warning>
+
+## Orval configuration
+
+```typescript lib/api-spec/orval.config.ts
+import { defineConfig, InputTransformerFn } from "orval";
+import path from "path";
+
+const root = path.resolve(__dirname, "..", "..");
+const apiClientReactSrc = path.resolve(root, "lib", "api-client-react", "src");
+const apiZodSrc = path.resolve(root, "lib", "api-zod", "src");
+
+// Our exports make assumptions about the title of the API being "Api" (i.e. generated output is `api.ts`).
+const titleTransformer: InputTransformerFn = (config) => {
+  config.info ??= {};
+  config.info.title = "Api";
+
+  return config;
+};
+
+export default defineConfig({
+  "api-client-react": {
+    input: {
+      target: "./openapi.yaml",
+      override: {
+        transformer: titleTransformer,
+      },
+    },
+    output: {
+      workspace: apiClientReactSrc,
+      target: "generated",
+      client: "react-query",
+      mode: "split",
+      baseUrl: "/api",
+      clean: true,
+      prettier: true,
+      override: {
+        fetch: {
+          includeHttpResponseReturnType: false,
+        },
+        mutator: {
+          path: path.resolve(apiClientReactSrc, "custom-fetch.ts"),
+          name: "customFetch",
+        },
+      },
+    },
+  },
+  zod: {
+    input: {
+      target: "./openapi.yaml",
+      override: {
+        transformer: titleTransformer,
+      },
+    },
+    output: {
+      workspace: apiZodSrc,
+      client: "zod",
+      target: "generated",
+      schemas: { path: "generated/types", type: "typescript" },
+      mode: "split",
+      clean: true,
+      prettier: true,
+      override: {
+        zod: {
+          coerce: {
+            query: ["boolean", "number", "string"],
+            param: ["boolean", "number", "string"],
+          },
+        },
+        useDates: true,
+      },
+    },
+  },
+});
+```
+
+## Output targets
+
+### api-client-react
+
+The `api-client-react` target outputs to `lib/api-client-react/src/generated/` and
+produces:
+
+| File | Contents |
+|------|----------|
+| `api.ts` | React Query hooks (e.g. `useHealthCheck`) and plain fetch functions (e.g. `healthCheck`) |
+| `api.schemas.ts` | TypeScript interfaces derived from OpenAPI `components/schemas` |
+
+The generated hooks use the native `fetch` API through a custom mutator (see below).
+
+### zod
+
+The `zod` target outputs to `lib/api-zod/src/generated/` and produces:
+
+| Path | Contents |
+|------|----------|
+| `api.ts` | Zod schemas for every request/response body, with query/param coercion enabled |
+| `types/` | TypeScript type files derived from the schemas |
+
+The API server (`@workspace/api-server`) imports from `@workspace/api-zod` to validate
+request and response payloads at runtime.
+
+## The titleTransformer
+
+Orval derives output file names from the OpenAPI `info.title`. The `titleTransformer`
+function overrides whatever title is in the spec file and forces it to `"Api"`, ensuring
+the generated files are always named `api.ts` regardless of what `openapi.yaml` declares.
+
+```typescript
+const titleTransformer: InputTransformerFn = (config) => {
+  config.info ??= {};
+  config.info.title = "Api";
+  return config;
+};
+```
+
+<Note>
+  The `openapi.yaml` file also documents this constraint with a comment:
+  `# Do not change the title, if the title changes, the import paths will be broken`
+</Note>
+
+## The custom fetch mutator
+
+Generated hooks call `customFetch` from `lib/api-client-react/src/custom-fetch.ts`
+instead of calling `fetch` directly. The mutator handles:
+
+- Automatic `Content-Type: application/json` detection
+- Response body parsing (JSON, text, or blob based on `Content-Type`)
+- Throwing a typed `ApiError` for non-2xx responses
+- A `ResponseParseError` for malformed JSON bodies
+
+The mutator is wired in via `orval.config.ts`:
+
+```typescript
+override: {
+  mutator: {
+    path: path.resolve(apiClientReactSrc, "custom-fetch.ts"),
+    name: "customFetch",
+  },
+},
+```
+
+## Adding a new endpoint
+
+<Steps>
+  <Step title="Edit openapi.yaml">
+    Add your new path, operation, and any new schemas to
+    `lib/api-spec/openapi.yaml`.
+
+    ```yaml
+    paths:
+      /courses:
+        get:
+          operationId: listCourses
+          tags: [courses]
+          summary: List all courses
+          responses:
+            "200":
+              description: OK
+              content:
+                application/json:
+                  schema:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Course"
+    components:
+      schemas:
+        Course:
+          type: object
+          properties:
+            id:
+              type: string
+            title:
+              type: string
+          required: [id, title]
+    ```
+  </Step>
+
+  <Step title="Run codegen">
+    ```bash
+    pnpm --filter @workspace/api-spec run codegen
+    ```
+
+    Orval overwrites the generated files in `lib/api-client-react/src/generated/` and
+    `lib/api-zod/src/generated/`.
+  </Step>
+
+  <Step title="Use the generated code">
+    In the frontend, import the generated React Query hook:
+
+    ```typescript
+    import { useListCourses } from "@workspace/api-client-react";
+
+    function CourseList() {
+      const { data } = useListCourses();
+      // ...
+    }
+    ```
+
+    In the API server, import the Zod schema for response validation:
+
+    ```typescript
+    import { courseSchema } from "@workspace/api-zod";
+    ```
+  </Step>
+
+  <Step title="Implement the route in api-server">
+    Add the Express route in `artifacts/api-server/src/routes/` and wire it into
+    `src/routes/index.ts`.
+  </Step>
+</Steps>

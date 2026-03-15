@@ -1,0 +1,146 @@
+---
+title: Frontend apps
+description: React-based educational apps with shadcn/ui components
+---
+
+The monorepo hosts React-based educational apps under `artifacts/`. The primary app is **pi-day** (`@workspace/pi-day`), an interactive single-page experience built for Pi Day (March 14).
+
+## Tech stack
+
+| Technology | Role |
+|---|---|
+| React + Vite | UI framework and dev server |
+| [Wouter](https://github.com/molefrog/wouter) | Lightweight client-side router |
+| [TanStack Query](https://tanstack.com/query) | Server state and data fetching |
+| [shadcn/ui](https://ui.shadcn.com/) + Radix UI | Accessible component primitives |
+| Tailwind CSS | Utility-first styling |
+| Framer Motion | Animations and transitions |
+
+## Application structure
+
+`src/App.tsx` is the root component. It sets up the `QueryClientProvider`, wraps the router with the Vite `BASE_URL`, and renders the `EasterEgg` component alongside the page router:
+
+```tsx src/App.tsx
+import { Switch, Route, Router as WouterRouter } from "wouter";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { Toaster } from "@/components/ui/toaster";
+import { TooltipProvider } from "@/components/ui/tooltip";
+import Home from "@/pages/Home";
+import NotFound from "@/pages/not-found";
+import { EasterEgg } from "@/components/EasterEgg";
+
+const queryClient = new QueryClient();
+
+function Router() {
+  return (
+    <Switch>
+      <Route path="/" component={Home} />
+      <Route component={NotFound} />
+    </Switch>
+  );
+}
+
+function App() {
+  return (
+    <QueryClientProvider client={queryClient}>
+      <TooltipProvider>
+        <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
+          <EasterEgg />
+          <Router />
+        </WouterRouter>
+        <Toaster />
+      </TooltipProvider>
+    </QueryClientProvider>
+  );
+}
+
+export default App;
+```
+
+## Educational sections
+
+The `Home` page renders six content sections in order. Each section is a self-contained component in `src/components/sections/`:
+
+<CardGroup cols={2}>
+  <Card title="Hero" icon="circle">
+    Landing section with an animated scrolling display of Pi digits and a
+    call-to-action to explore the page.
+  </Card>
+  <Card title="WhatIsPi" icon="pi">
+    Introductory explanation of what Pi is, its definition as the ratio of
+    circumference to diameter, and its irrational nature.
+  </Card>
+  <Card title="History" icon="clock">
+    Historical timeline of Pi — from Babylonian approximations 4,000 years
+    ago to Euler popularising the π symbol in 1737.
+  </Card>
+  <Card title="MemoryGame" icon="brain">
+    Interactive digit-memorisation challenge. Supports Normal, Time Attack,
+    and Endless modes with a lives system and score tracking.
+  </Card>
+  <Card title="Visualizer" icon="chart-line">
+    Visual demonstrations of Pi in action — circle geometry and related
+    mathematical visualisations.
+  </Card>
+  <Card title="RealWorld" icon="globe">
+    Real-world applications of Pi across engineering, physics, GPS, and
+    NASA mission planning.
+  </Card>
+</CardGroup>
+
+## PiBot
+
+The `PiBot` component (`src/components/PiBot.tsx`) is a floating chat assistant fixed to the bottom-right of the page. It provides pre-set Q&A about Pi without requiring a backend — all responses are stored as a hardcoded lookup table.
+
+Key features:
+- Floating action button (FAB) that opens an animated chat window
+- Four preset question shortcuts displayed as pill buttons
+- Input matching against a `RESPONSES` record using `toLowerCase()` includes-checks
+- Typing indicator with animated dots and audio beep feedback via `playTypingBeep()`
+
+## EasterEgg
+
+Typing `3.14159` anywhere on the page triggers a hidden Easter Egg interaction. The hint is displayed in the page footer:
+
+> Intenta teclear 3.14159 en cualquier lugar de la página...
+
+## Component organisation
+
+```
+src/
+  components/
+    sections/      # Full-page content sections (Hero, WhatIsPi, …)
+    ui/            # shadcn/ui primitives (Button, Card, Dialog, …)
+    EasterEgg.tsx  # Konami-style keyboard trigger
+    Navbar.tsx     # Fixed top navigation with smooth-scroll links
+    PiBot.tsx      # Floating chat assistant
+  hooks/           # Custom React hooks
+  lib/
+    audio.ts       # playTypingBeep, playSuccessSound, playErrorSound
+    constants.ts   # PI_DIGITS string and other shared constants
+    utils.ts       # cn() and other utility helpers
+  pages/
+    Home.tsx       # Main page — composes all sections
+    not-found.tsx  # 404 fallback route
+```
+
+## Running the dev server
+
+```bash
+pnpm --filter @workspace/pi-day run dev
+```
+
+Vite starts with `--host 0.0.0.0` so the app is accessible on all network interfaces. Hot Module Replacement (HMR) is enabled by default.
+
+## Other scripts
+
+```bash
+# Production build
+pnpm --filter @workspace/pi-day run build
+
+# Preview the production build locally
+pnpm --filter @workspace/pi-day run serve
+
+# Type-check without emitting files
+pnpm --filter @workspace/pi-day run typecheck
+```

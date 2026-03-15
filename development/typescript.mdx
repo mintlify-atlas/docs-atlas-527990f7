@@ -1,0 +1,148 @@
+---
+title: TypeScript configuration
+description: How TypeScript composite projects and project references work in this monorepo
+---
+
+EduLearn Hub uses TypeScript's **composite project** and **project references** features
+to typecheck the entire monorepo in dependency order with a single command.
+
+## tsconfig.base.json
+
+All packages extend a shared base config at the repo root:
+
+```json tsconfig.base.json
+{
+  "compilerOptions": {
+    "isolatedModules": true,
+    "lib": ["es2022"],
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "noEmitOnError": true,
+    "noFallthroughCasesInSwitch": true,
+    "noImplicitOverride": false,
+    "noImplicitReturns": true,
+    "noUnusedLocals": false,
+    "noImplicitAny": true,
+    "noImplicitThis": true,
+    "strictNullChecks": true,
+    "strictFunctionTypes": false,
+    "strictBindCallApply": true,
+    "strictPropertyInitialization": true,
+    "useUnknownInCatchVariables": true,
+    "alwaysStrict": true,
+    "skipLibCheck": true,
+    "target": "es2022",
+    "types": [],
+    "customConditions": ["workspace"]
+  }
+}
+```
+
+## Composite projects
+
+Every library package sets `"composite": true` in its own `compilerOptions`. This flag
+requires TypeScript to:
+
+- Produce `.d.ts` declaration files alongside the source
+- Write a `tsconfig.tsbuildinfo` file so subsequent builds can skip up-to-date packages
+- Enforce that `rootDir` and `outDir` are set
+
+Example from `lib/db`:
+
+```json lib/db/tsconfig.json
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "composite": true,
+    "declarationMap": true,
+    "emitDeclarationOnly": true,
+    "outDir": "dist",
+    "rootDir": "src",
+    "types": ["node"]
+  },
+  "include": ["src"]
+}
+```
+
+## emitDeclarationOnly
+
+Library packages set `"emitDeclarationOnly": true`. When `tsc` runs, it writes only
+`.d.ts` declaration files to `outDir` — no compiled JavaScript. Actual JS bundling is
+done by esbuild (API server) or Vite (frontend apps), not by `tsc`. This keeps typecheck
+fast and avoids duplicate output.
+
+## Project references
+
+When package A imports from package B, A's `tsconfig.json` must list B in its
+`references` array. `tsc --build` uses the reference graph to:
+
+1. Determine the correct build order
+2. Skip any package whose `.d.ts` output is already up-to-date
+3. Make cross-package type information available without a global `paths` mapping
+
+Example from `artifacts/api-server`, which depends on `@workspace/db` and
+`@workspace/api-zod`:
+
+```json artifacts/api-server/tsconfig.json
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "dist",
+    "rootDir": "src",
+    "types": ["node"]
+  },
+  "include": ["src"],
+  "references": [
+    { "path": "../../lib/db" },
+    { "path": "../../lib/api-zod" }
+  ]
+}
+```
+
+The root `tsconfig.json` is the entry point for the library packages:
+
+```json tsconfig.json
+{
+  "extends": "./tsconfig.base.json",
+  "compileOnSave": false,
+  "files": [],
+  "references": [
+    { "path": "./lib/db" },
+    { "path": "./lib/api-client-react" },
+    { "path": "./lib/api-zod" }
+  ]
+}
+```
+
+Artifact packages (`artifacts/**`) and `scripts` define their own `typecheck` script that
+calls `tsc --noEmit` directly, and the root `pnpm run typecheck` invokes those after
+building the libs.
+
+## Always typecheck from the root
+
+```bash
+pnpm run typecheck
+```
+
+This runs:
+
+```
+tsc --build --emitDeclarationOnly   # builds lib packages in reference order
+pnpm -r --filter ./artifacts/** ... run typecheck  # checks artifact packages
+pnpm -r --filter ./scripts run typecheck
+```
+
+<Warning>
+  Do **not** run `tsc` directly inside an individual package. If the upstream `.d.ts`
+  files have not been generated yet, TypeScript cannot resolve cross-package imports and
+  the typecheck will fail with confusing "module not found" errors. Always run
+  `pnpm run typecheck` from the repo root so that project references are processed in
+  the correct order.
+</Warning>
+
+## Module resolution: bundler
+
+`tsconfig.base.json` sets `"moduleResolution": "bundler"`. This mode is designed for
+cases where a bundler (esbuild, Vite, etc.) handles actual module resolution at build
+time. It relaxes some Node.js-specific constraints — for example, you do not need to
+include `.js` extensions on relative imports — while still fully checking types.
